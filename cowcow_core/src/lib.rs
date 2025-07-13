@@ -41,10 +41,10 @@ impl AudioProcessor {
     pub fn new(sample_rate: u32, channels: u16) -> Result<Self> {
         // Validate sample rate
         match sample_rate {
-            8000 | 16000 | 32000 | 48000 => {},
+            8000 | 16000 | 32000 | 48000 => {}
             _ => return Err(anyhow::anyhow!("Unsupported sample rate: {}", sample_rate)),
         };
-        
+
         let vad = webrtc_vad::Vad::new(sample_rate as i32)
             .map_err(|_| anyhow::anyhow!("Failed to create VAD instance"))?;
         Ok(Self {
@@ -59,16 +59,16 @@ impl AudioProcessor {
     pub fn process_chunk(&mut self, samples: &[f32]) -> QcMetrics {
         // Calculate RMS
         let rms = self.calculate_rms(samples);
-        
+
         // Detect clipping
         let clipping_pct = self.detect_clipping(samples);
-        
+
         // Run VAD
         let vad_ratio = self.run_vad(samples);
-        
+
         // Compute SNR (simplified)
         let snr_db = self.estimate_snr(rms, clipping_pct);
-        
+
         QcMetrics {
             snr_db,
             clipping_pct,
@@ -160,31 +160,31 @@ pub extern "C" fn analyze_wav(path: *const c_char) -> QcMetrics {
 fn analyze_wav_internal(path: &str) -> Result<QcMetrics> {
     let reader = hound::WavReader::open(path)?;
     let spec = reader.spec();
-    
+
     let mut processor = AudioProcessor::new(spec.sample_rate, spec.channels)?;
     let mut all_samples = Vec::new();
-    
+
     // Read all samples
     for sample in reader.into_samples::<i16>() {
         let sample = sample?;
         all_samples.push(sample as f32 / 32768.0);
     }
-    
+
     // Process in chunks
     let chunk_size = (spec.sample_rate as f32 * 0.1) as usize; // 100ms chunks
     let mut metrics = Vec::new();
-    
+
     for chunk in all_samples.chunks(chunk_size) {
         metrics.push(processor.process_chunk(chunk));
     }
-    
+
     // Average the metrics
     let avg_metrics = QcMetrics {
         snr_db: metrics.iter().map(|m| m.snr_db).sum::<f32>() / metrics.len() as f32,
         clipping_pct: metrics.iter().map(|m| m.clipping_pct).sum::<f32>() / metrics.len() as f32,
         vad_ratio: metrics.iter().map(|m| m.vad_ratio).sum::<f32>() / metrics.len() as f32,
     };
-    
+
     Ok(avg_metrics)
 }
 
@@ -195,18 +195,18 @@ mod tests {
     #[test]
     fn test_audio_processor() {
         let mut processor = AudioProcessor::new(16000, 1).unwrap();
-        
+
         // Generate a test signal (sine wave)
         let mut samples = Vec::new();
         for i in 0..1600 {
             let t = i as f32 / 16000.0;
             samples.push((2.0 * std::f32::consts::PI * 440.0 * t).sin());
         }
-        
+
         let metrics = processor.process_chunk(&samples);
-        
+
         assert!(metrics.snr_db > 0.0);
         assert!(metrics.clipping_pct < 1.0);
         assert!(metrics.vad_ratio >= 0.0 && metrics.vad_ratio <= 100.0);
     }
-} 
+}
