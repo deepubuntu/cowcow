@@ -365,9 +365,8 @@ async fn record_audio(
                         silence_duration_samples as f64 / samples_per_second as f64;
 
                     if silence_duration_secs >= silence_threshold_secs {
-                        stop_reason = Some(format!(
-                            "Silence detected for {silence_duration_secs:.1}s"
-                        ));
+                        stop_reason =
+                            Some(format!("Silence detected for {silence_duration_secs:.1}s"));
                     }
                 }
 

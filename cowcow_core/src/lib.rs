@@ -47,7 +47,7 @@ impl AudioProcessor {
         // Validate channels - WebRTC VAD only supports mono audio
         if channels != 1 {
             return Err(anyhow::anyhow!(
-                "Only mono audio (1 channel) is supported, got {} channels", 
+                "Only mono audio (1 channel) is supported, got {} channels",
                 channels
             ));
         }
@@ -72,8 +72,8 @@ impl AudioProcessor {
     }
 
     /// Process a chunk of audio samples
-    /// 
-    /// Expects mono audio samples. For multi-channel audio, samples should be 
+    ///
+    /// Expects mono audio samples. For multi-channel audio, samples should be
     /// converted to mono before calling this function.
     pub fn process_chunk(&mut self, samples: &[f32]) -> QcMetrics {
         // Calculate RMS
@@ -168,9 +168,9 @@ pub fn analyze_wav_file<P: AsRef<std::path::Path>>(path: P) -> Result<QcMetrics>
 /// - `path` is a valid pointer to a null-terminated C string
 /// - The string pointed to by `path` is valid UTF-8 or UTF-8 compatible
 /// - The pointer remains valid for the duration of the function call
-/// 
+///
 /// # Note
-/// 
+///
 /// Consider using the safe `analyze_wav_file` function instead if calling from Rust.
 #[no_mangle]
 pub unsafe extern "C" fn analyze_wav(path: *const c_char) -> QcMetrics {
