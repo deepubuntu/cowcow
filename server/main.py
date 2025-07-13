@@ -33,14 +33,14 @@ from sqlalchemy.orm import Session
 
 # Configuration
 class Settings(BaseSettings):
-    jwt_secret: str
+    jwt_secret: str = "test-secret-key-for-development-only"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440  # 24 hours
-    r2_access_key: str
-    r2_secret_key: str
-    r2_endpoint: str
-    r2_bucket: str
-    database_url: str
+    r2_access_key: str = "test-access-key"
+    r2_secret_key: str = "test-secret-key"
+    r2_endpoint: str = "https://test-endpoint.com"
+    r2_bucket: str = "test-bucket"
+    database_url: str = "sqlite:///./test_db.sqlite"
 
     class Config:
         env_file = ".env"
