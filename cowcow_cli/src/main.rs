@@ -258,7 +258,7 @@ async fn record_audio(
 
     // Generate unique ID for this recording
     let recording_id = Uuid::new_v4();
-    let wav_path = output_dir.join(format!("{}.wav", recording_id));
+    let wav_path = output_dir.join(format!("{recording_id}.wav"));
 
     // Create WAV writer
     let spec = hound::WavSpec {
@@ -293,7 +293,7 @@ async fn record_audio(
     // Display prompt if provided
     if let Some(prompt_text) = &prompt {
         println!("\nPlease read the following text:");
-        println!("\"{}\"", prompt_text);
+        println!("\"{prompt_text}\"");
         println!("Press Enter to start recording...");
         std::io::stdin().read_line(&mut String::new())?;
     }
@@ -301,7 +301,7 @@ async fn record_audio(
     // Give user time to prepare
     println!("Get ready to speak...");
     for i in (1..=3).rev() {
-        println!("Starting in {}...", i);
+        println!("Starting in {i}...");
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
     println!("🎙️  RECORDING NOW!");
@@ -366,8 +366,7 @@ async fn record_audio(
 
                     if silence_duration_secs >= silence_threshold_secs {
                         stop_reason = Some(format!(
-                            "Silence detected for {:.1}s",
-                            silence_duration_secs
+                            "Silence detected for {silence_duration_secs:.1}s"
                         ));
                     }
                 }
@@ -377,8 +376,7 @@ async fn record_audio(
                     if let Some(dur) = duration {
                         if actual_duration >= dur {
                             stop_reason = Some(format!(
-                                "Duration reached: {:.2?} (actual audio duration)",
-                                actual_duration
+                                "Duration reached: {actual_duration:.2?} (actual audio duration)"
                             ));
                         }
                     }
@@ -389,7 +387,7 @@ async fn record_audio(
                     let silence_duration_samples = total_samples_processed - silence_start;
                     let silence_duration_secs =
                         silence_duration_samples as f64 / samples_per_second as f64;
-                    format!(" | Silence: {:.1}s", silence_duration_secs)
+                    format!(" | Silence: {silence_duration_secs:.1}s")
                 } else {
                     String::new()
                 };
@@ -412,7 +410,7 @@ async fn record_audio(
 
                 // Stop recording if conditions are met
                 if let Some(reason) = stop_reason {
-                    println!("{}", reason);
+                    println!("{reason}");
                     break;
                 }
             }
@@ -570,7 +568,7 @@ async fn check_health(config: &Config) -> Result<()> {
 async fn export_recordings(format: String, dest: PathBuf, _db: &SqlitePool) -> Result<()> {
     // TODO: Implement export functionality
     info!("Export functionality not yet implemented");
-    println!("Export format: {}", format);
+    println!("Export format: {format}");
     println!("Destination: {}", dest.display());
     Ok(())
 }
@@ -583,14 +581,14 @@ async fn handle_auth_command(command: AuthCommands, config: &Config) -> Result<(
             let (username, password) = prompt_for_credentials()?;
             match auth_client.login(username, password).await {
                 Ok(_) => println!("✅ Login successful!"),
-                Err(e) => println!("❌ Login failed: {}", e),
+                Err(e) => println!("❌ Login failed: {e}"),
             }
         }
         AuthCommands::Register => {
             let (username, email, password) = prompt_for_registration()?;
             match auth_client.register(username, email, password).await {
                 Ok(_) => println!("✅ Registration successful! You can now login."),
-                Err(e) => println!("❌ Registration failed: {}", e),
+                Err(e) => println!("❌ Registration failed: {e}"),
             }
         }
         AuthCommands::Logout => {
@@ -601,7 +599,7 @@ async fn handle_auth_command(command: AuthCommands, config: &Config) -> Result<(
             Ok(creds) => {
                 println!("✅ Authenticated");
                 if let Some(username) = creds.username {
-                    println!("  Username: {}", username);
+                    println!("  Username: {username}");
                 }
                 if let Some(expires_at) = creds.expires_at {
                     let expires =
@@ -621,10 +619,10 @@ async fn handle_config_command(command: ConfigCommands, config: &Config) -> Resu
         ConfigCommands::Show => {
             let config_toml = toml::to_string_pretty(config)?;
             println!("📁 Current Configuration:");
-            println!("{}", config_toml);
+            println!("{config_toml}");
         }
         ConfigCommands::Set { key, value } => {
-            println!("Setting {}: {}", key, value);
+            println!("Setting {key}: {value}");
             // TODO: Implement config setting
             println!("Config setting not yet implemented");
         }
