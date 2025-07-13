@@ -31,11 +31,8 @@ pub enum AudioError {
 /// Audio processor for real-time quality control
 pub struct AudioProcessor {
     sample_rate: u32,
-    #[allow(dead_code)]
     channels: u16,
     vad: webrtc_vad::Vad,
-    #[allow(dead_code)]
-    buffer: Vec<f32>,
 }
 
 impl AudioProcessor {
@@ -47,17 +44,37 @@ impl AudioProcessor {
             _ => return Err(anyhow::anyhow!("Unsupported sample rate: {}", sample_rate)),
         };
 
+        // Validate channels - WebRTC VAD only supports mono audio
+        if channels != 1 {
+            return Err(anyhow::anyhow!(
+                "Only mono audio (1 channel) is supported, got {} channels", 
+                channels
+            ));
+        }
+
         let vad = webrtc_vad::Vad::new(sample_rate as i32)
             .map_err(|_| anyhow::anyhow!("Failed to create VAD instance"))?;
         Ok(Self {
             sample_rate,
             channels,
             vad,
-            buffer: Vec::new(),
         })
     }
 
+    /// Get the number of channels this processor expects
+    pub fn channels(&self) -> u16 {
+        self.channels
+    }
+
+    /// Get the sample rate this processor expects
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
     /// Process a chunk of audio samples
+    /// 
+    /// Expects mono audio samples. For multi-channel audio, samples should be 
+    /// converted to mono before calling this function.
     pub fn process_chunk(&mut self, samples: &[f32]) -> QcMetrics {
         // Calculate RMS
         let rms = self.calculate_rms(samples);
@@ -137,7 +154,13 @@ impl AudioProcessor {
     }
 }
 
-/// Analyze a WAV file and return QC metrics
+/// Analyze a WAV file and return QC metrics (safe Rust API)
+pub fn analyze_wav_file<P: AsRef<std::path::Path>>(path: P) -> Result<QcMetrics> {
+    let path_str = path.as_ref().to_string_lossy();
+    analyze_wav_internal(&path_str)
+}
+
+/// Analyze a WAV file and return QC metrics (unsafe C FFI)
 ///
 /// # Safety
 ///
@@ -145,6 +168,10 @@ impl AudioProcessor {
 /// - `path` is a valid pointer to a null-terminated C string
 /// - The string pointed to by `path` is valid UTF-8 or UTF-8 compatible
 /// - The pointer remains valid for the duration of the function call
+/// 
+/// # Note
+/// 
+/// Consider using the safe `analyze_wav_file` function instead if calling from Rust.
 #[no_mangle]
 pub unsafe extern "C" fn analyze_wav(path: *const c_char) -> QcMetrics {
     let path_str = std::ffi::CStr::from_ptr(path)
@@ -202,6 +229,13 @@ mod tests {
     #[test]
     fn test_audio_processor() {
         let mut processor = AudioProcessor::new(16000, 1).unwrap();
+
+        // Test configuration getters
+        assert_eq!(processor.sample_rate(), 16000);
+        assert_eq!(processor.channels(), 1);
+
+        // Test that multi-channel fails
+        assert!(AudioProcessor::new(16000, 2).is_err());
 
         // Generate a test signal (sine wave)
         let mut samples = Vec::new();
