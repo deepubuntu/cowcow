@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE upload_queue SET attempts = ?, last_attempt = ? WHERE recording_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "092052927a5a453152582197bd99b4056a2cf21b3d4744b8b3f240aa60d45339"
+}

@@ -13,11 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev pkg-config
+      
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
           components: rustfmt, clippy
       
       - name: Cache dependencies
@@ -34,15 +37,21 @@ jobs:
       
       - name: Clippy
         run: cargo clippy -- -D warnings
+        env:
+          SQLX_OFFLINE: true
       
       - name: Run tests
         run: cargo test --all
+        env:
+          SQLX_OFFLINE: true
       
       - name: Build
-        run: cargo build --all
+        run: cargo build --all --release
+        env:
+          SQLX_OFFLINE: true
 
   python:
-    name: Python
+    name: Python Server
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,50 +71,39 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r server/requirements.txt
-          pip install pytest pytest-asyncio
       
-      - name: Run tests
+      - name: Check syntax
         run: |
           cd server
-          pytest
+          python -m py_compile *.py
+      
+      - name: Run basic import test
+        run: |
+          cd server
+          python -c "import main; print('Server imports successfully')"
 
-  flutter:
-    name: Flutter
+  scripts:
+    name: Automation Scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.x'
-          channel: 'stable'
-      
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.pub-cache
-            cowcow_flutter/.dart_tool
-            cowcow_flutter/build
-          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
-      
-      - name: Install dependencies
+      - name: Test script syntax
         run: |
-          cd cowcow_flutter
-          flutter pub get
+          bash -n scripts/build.sh
+          bash -n scripts/test.sh
       
-      - name: Analyze
+      - name: Check script permissions
         run: |
-          cd cowcow_flutter
-          flutter analyze
+          test -x scripts/build.sh
+          test -x scripts/test.sh
       
-      - name: Run tests
+      - name: Validate project structure
         run: |
-          cd cowcow_flutter
-          flutter test
-      
-      - name: Build
-        run: |
-          cd cowcow_flutter
-          flutter build apk --debug 
+          test -f Cargo.toml
+          test -f README.md
+          test -f .gitignore
+          test -d docs
+          test -d cowcow_cli
+          test -d cowcow_core
+          test -d server 

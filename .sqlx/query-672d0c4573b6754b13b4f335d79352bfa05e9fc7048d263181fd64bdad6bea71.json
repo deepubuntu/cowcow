@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM upload_queue WHERE recording_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "672d0c4573b6754b13b4f335d79352bfa05e9fc7048d263181fd64bdad6bea71"
+}
