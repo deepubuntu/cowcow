@@ -77,10 +77,22 @@ else
     error "Rust not found. Install from: https://rustup.rs/"
 fi
 
-# Check Python installation
-if command -v python3 &> /dev/null; then
+# Check Python installation - prefer 3.11 or 3.12 for better compatibility
+if command -v python3.11 &> /dev/null; then
+    PYTHON_CMD="python3.11"
+    PYTHON_VERSION=$(python3.11 --version | cut -d' ' -f2)
+    success "Python is installed (version: $PYTHON_VERSION)"
+elif command -v python3.12 &> /dev/null; then
+    PYTHON_CMD="python3.12"
+    PYTHON_VERSION=$(python3.12 --version | cut -d' ' -f2)
+    success "Python is installed (version: $PYTHON_VERSION)"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
     PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
     success "Python is installed (version: $PYTHON_VERSION)"
+    if [[ "$PYTHON_VERSION" > "3.13" ]]; then
+        warning "Python 3.13+ detected. Some packages may have compatibility issues."
+    fi
 else
     error "Python 3 not found. Install from: https://python.org"
 fi
@@ -127,7 +139,7 @@ cd server || error "Server directory not found"
 # Create virtual environment if it doesn't exist
 if [ ! -d ".venv" ]; then
     info "Creating Python virtual environment..."
-    python3 -m venv .venv || error "Failed to create virtual environment"
+    $PYTHON_CMD -m venv .venv || error "Failed to create virtual environment"
     success "Virtual environment created"
 fi
 

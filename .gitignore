@@ -31,6 +31,9 @@ venv/
 *.sqlite
 *.sqlite3
 
+# Build artifacts
+temp_build.db
+
 # Logs
 *.log
 logs/

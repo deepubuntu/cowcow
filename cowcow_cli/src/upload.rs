@@ -229,23 +229,19 @@ impl UploadClient {
                     Ok(_) => {
                         // Mark as uploaded
                         let now = chrono::Utc::now().timestamp();
-                        sqlx::query!(
-                            "UPDATE recordings SET uploaded_at = ? WHERE id = ?",
-                            now,
-                            recording.id
-                        )
-                        .execute(db)
-                        .await
-                        .context("Failed to update recording status")?;
+                        sqlx::query("UPDATE recordings SET uploaded_at = ? WHERE id = ?")
+                            .bind(now)
+                            .bind(&recording.id)
+                            .execute(db)
+                            .await
+                            .context("Failed to update recording status")?;
 
                         // Remove from upload queue
-                        sqlx::query!(
-                            "DELETE FROM upload_queue WHERE recording_id = ?",
-                            recording.id
-                        )
-                        .execute(db)
-                        .await
-                        .context("Failed to remove from upload queue")?;
+                        sqlx::query("DELETE FROM upload_queue WHERE recording_id = ?")
+                            .bind(&recording.id)
+                            .execute(db)
+                            .await
+                            .context("Failed to remove from upload queue")?;
 
                         successful_uploads += 1;
                         success = true;
@@ -260,14 +256,12 @@ impl UploadClient {
 
                         // Update attempt count
                         let now = chrono::Utc::now().timestamp();
-                        sqlx::query!(
-                            "UPDATE upload_queue SET attempts = ?, last_attempt = ? WHERE recording_id = ?",
-                            attempts,
-                            now,
-                            recording.id
-                        )
-                        .execute(db)
-                        .await
+                        sqlx::query("UPDATE upload_queue SET attempts = ?, last_attempt = ? WHERE recording_id = ?")
+                            .bind(attempts)
+                            .bind(now)
+                            .bind(&recording.id)
+                            .execute(db)
+                            .await
                         .context("Failed to update upload queue")?;
 
                         if attempts < self.config.upload.max_retries as i64 {

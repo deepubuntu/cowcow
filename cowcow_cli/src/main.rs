@@ -7,6 +7,7 @@ use cowcow_core::{AudioProcessor, QcMetrics};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use indicatif::{ProgressBar, ProgressStyle};
 use sqlx::sqlite::SqlitePool;
+use sqlx::Row;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -506,7 +507,7 @@ async fn upload_recordings(force: bool, db: &SqlitePool, config: &Config) -> Res
 }
 
 async fn show_stats(db: &SqlitePool) -> Result<()> {
-    let stats = sqlx::query!(
+    let stats = sqlx::query(
         r#"
         SELECT 
             COUNT(*) as total_recordings,
@@ -519,9 +520,9 @@ async fn show_stats(db: &SqlitePool) -> Result<()> {
     .await?;
 
     println!("📊 Recording Statistics");
-    println!("  Total recordings: {}", stats.total_recordings);
-    println!("  Uploaded: {}", stats.uploaded_recordings);
-    println!("  Pending: {}", stats.pending_recordings);
+    println!("  Total recordings: {}", stats.get::<i64, _>("total_recordings"));
+    println!("  Uploaded: {}", stats.get::<i64, _>("uploaded_recordings"));
+    println!("  Pending: {}", stats.get::<i64, _>("pending_recordings"));
 
     Ok(())
 }
