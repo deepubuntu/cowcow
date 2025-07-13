@@ -79,7 +79,7 @@ impl UploadClient {
                 .template("{spinner:.green} Uploading {msg}")
                 .unwrap(),
         );
-        pb.set_message(format!("recording {}", recording_id));
+        pb.set_message(format!("recording {recording_id}"));
 
         let mut request = self.client.post(&upload_url);
 
@@ -96,7 +96,7 @@ impl UploadClient {
             .multipart(form)
             .send()
             .await
-            .with_context(|| format!("Failed to send upload request to {}", upload_url))?;
+            .with_context(|| format!("Failed to send upload request to {upload_url}"))?;
 
         pb.finish_with_message("Upload complete");
 
@@ -228,7 +228,7 @@ impl UploadClient {
                 {
                     Ok(_) => {
                         // Mark as uploaded
-                        let now = chrono::Utc::now().timestamp() as i64;
+                        let now = chrono::Utc::now().timestamp();
                         sqlx::query!(
                             "UPDATE recordings SET uploaded_at = ? WHERE id = ?",
                             now,
@@ -259,7 +259,7 @@ impl UploadClient {
                         );
 
                         // Update attempt count
-                        let now = chrono::Utc::now().timestamp() as i64;
+                        let now = chrono::Utc::now().timestamp();
                         sqlx::query!(
                             "UPDATE upload_queue SET attempts = ?, last_attempt = ? WHERE recording_id = ?",
                             attempts,

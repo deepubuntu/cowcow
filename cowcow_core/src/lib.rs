@@ -31,8 +31,10 @@ pub enum AudioError {
 /// Audio processor for real-time quality control
 pub struct AudioProcessor {
     sample_rate: u32,
+    #[allow(dead_code)]
     channels: u16,
     vad: webrtc_vad::Vad,
+    #[allow(dead_code)]
     buffer: Vec<f32>,
 }
 
@@ -136,13 +138,18 @@ impl AudioProcessor {
 }
 
 /// Analyze a WAV file and return QC metrics
+///
+/// # Safety
+///
+/// This function dereferences a raw pointer. The caller must ensure that:
+/// - `path` is a valid pointer to a null-terminated C string
+/// - The string pointed to by `path` is valid UTF-8 or UTF-8 compatible
+/// - The pointer remains valid for the duration of the function call
 #[no_mangle]
-pub extern "C" fn analyze_wav(path: *const c_char) -> QcMetrics {
-    let path_str = unsafe {
-        std::ffi::CStr::from_ptr(path)
-            .to_string_lossy()
-            .into_owned()
-    };
+pub unsafe extern "C" fn analyze_wav(path: *const c_char) -> QcMetrics {
+    let path_str = std::ffi::CStr::from_ptr(path)
+        .to_string_lossy()
+        .into_owned();
 
     match analyze_wav_internal(&path_str) {
         Ok(metrics) => metrics,

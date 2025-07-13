@@ -62,7 +62,7 @@ impl AuthClient {
             .form(&form_data)
             .send()
             .await
-            .with_context(|| format!("Failed to send login request to {}", login_url))?;
+            .with_context(|| format!("Failed to send login request to {login_url}"))?;
 
         if response.status().is_success() {
             let login_response: LoginResponse = response
@@ -114,7 +114,7 @@ impl AuthClient {
             .json(&register_request)
             .send()
             .await
-            .with_context(|| format!("Failed to send registration request to {}", register_url))?;
+            .with_context(|| format!("Failed to send registration request to {register_url}"))?;
 
         if response.status().is_success() {
             let _register_response: RegisterResponse = response
@@ -165,7 +165,7 @@ impl AuthClient {
             .get(&health_url)
             .send()
             .await
-            .with_context(|| format!("Failed to connect to {}", health_url))?;
+            .with_context(|| format!("Failed to connect to {health_url}"))?;
 
         if response.status().is_success() {
             info!("Server health check passed");
