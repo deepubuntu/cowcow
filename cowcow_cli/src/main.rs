@@ -514,13 +514,16 @@ async fn show_stats(db: &SqlitePool) -> Result<()> {
             COUNT(CASE WHEN uploaded_at IS NOT NULL THEN 1 END) as uploaded_recordings,
             COUNT(CASE WHEN uploaded_at IS NULL THEN 1 END) as pending_recordings
         FROM recordings
-        "#
+        "#,
     )
     .fetch_one(db)
     .await?;
 
     println!("📊 Recording Statistics");
-    println!("  Total recordings: {}", stats.get::<i64, _>("total_recordings"));
+    println!(
+        "  Total recordings: {}",
+        stats.get::<i64, _>("total_recordings")
+    );
     println!("  Uploaded: {}", stats.get::<i64, _>("uploaded_recordings"));
     println!("  Pending: {}", stats.get::<i64, _>("pending_recordings"));
 
