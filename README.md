@@ -100,10 +100,10 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **How it works:**
-- ⏱️ Starts silence timer when no voice activity detected
-- 🗣️ Resets timer when voice activity resumes  
-- ⏹️ Auto-stops after 5 continuous seconds of silence
-- 🎚️ Uses both VAD and RMS-based voice detection
+- Starts silence timer when no voice activity detected
+- Resets timer when voice activity resumes  
+- Auto-stops after 5 continuous seconds of silence
+- Uses both VAD and RMS-based voice detection
 
 ### Fixed Duration Recording
 
@@ -127,7 +127,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 # ... any ISO language code
 ```
 
-## 📊 Quality Control Metrics
+## Quality Control Metrics
 
 Real-time monitoring during recording:
 
@@ -151,7 +151,7 @@ max_clipping_pct = 1.0   # Maximum clipping percentage
 min_vad_ratio = 80.0     # Minimum voice activity ratio
 ```
 
-## 🔧 Configuration
+## Configuration
 
 Configuration is stored in `~/.cowcow/config.toml`:
 
@@ -177,7 +177,7 @@ retry_delay_secs = 2
 chunk_size = 1048576
 ```
 
-## 🛠️ CLI Commands
+## CLI Commands
 
 ### Automation Scripts
 ```bash
@@ -245,7 +245,7 @@ chunk_size = 1048576
 ./target/release/cowcow_cli config reset
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 graph LR
@@ -277,7 +277,7 @@ graph LR
     CLI -.->|"HTTP/REST"| Server
 ```
 
-## 🔍 Development
+## Development
 
 ### Project Structure
 ```
@@ -308,7 +308,7 @@ When server is running, visit:
 - **REST API**: http://localhost:8000/docs (Swagger UI)
 - **Health Check**: http://localhost:8000/health
 
-## 🚀 Production Deployment
+## Production Deployment
 
 ### Server Environment Variables
 
@@ -348,7 +348,7 @@ R2_BUCKET=cowcow-recordings
 - **Testing**: Unit tests for Rust, integration tests for APIs
 - **Documentation**: Update docs for all new features
 ---
-### 🚀 Future Features & Contribution Opportunities
+### Future Features & Contribution Opportunities
 
 We welcome contributors to work on these exciting upcoming features:
 
@@ -461,7 +461,7 @@ We welcome contributors to work on these exciting upcoming features:
 - Admin interface creation
 - Data visualization components
 
-### 🎯 Contribution Guidelines
+### Contribution Guidelines
 
 1. **Check Issues**: Look for "good first issue" or "help wanted" labels, if any
 2. **Discuss First**: Open an issue to discuss major features before coding
