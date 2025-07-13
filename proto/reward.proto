@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package cowcow;
+
+// Reward service for managing contributor tokens
+service RewardService {
+  // Get the current token balance
+  rpc GetBalance(BalanceRequest) returns (BalanceResponse);
+  
+  // Get token transaction history
+  rpc GetHistory(HistoryRequest) returns (stream Transaction);
+}
+
+// Request for token balance
+message BalanceRequest {
+  // Contributor ID
+  string contributor_id = 1;
+}
+
+// Response with token balance
+message BalanceResponse {
+  // Current token balance
+  uint32 balance = 1;
+  
+  // Total tokens earned
+  uint32 total_earned = 2;
+  
+  // Total tokens spent
+  uint32 total_spent = 3;
+}
+
+// Request for transaction history
+message HistoryRequest {
+  // Contributor ID
+  string contributor_id = 1;
+  
+  // Optional start timestamp
+  optional uint64 start_time = 2;
+  
+  // Optional end timestamp
+  optional uint64 end_time = 3;
+}
+
+// A token transaction
+message Transaction {
+  // Transaction ID
+  string transaction_id = 1;
+  
+  // Transaction type
+  enum Type {
+    EARNED = 0;
+    SPENT = 1;
+  }
+  
+  Type type = 2;
+  
+  // Number of tokens
+  uint32 amount = 3;
+  
+  // Timestamp
+  uint64 timestamp = 4;
+  
+  // Optional description
+  optional string description = 5;
+  
+  // Optional recording ID if earned from recording
+  optional string recording_id = 6;
+} 

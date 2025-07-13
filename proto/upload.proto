@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package cowcow;
+
+// Upload service for sending recordings to the server
+service UploadService {
+  // Upload a recording in chunks
+  rpc UploadChunk(stream Chunk) returns (UploadResponse);
+  
+  // Get the status of an upload
+  rpc GetUploadStatus(UploadRequest) returns (UploadStatus);
+}
+
+// A chunk of audio data
+message Chunk {
+  // Recording ID
+  string recording_id = 1;
+  
+  // Chunk sequence number
+  uint32 sequence = 2;
+  
+  // Audio data (WAV format)
+  bytes data = 3;
+  
+  // Quality control metrics
+  QcMetrics qc_metrics = 4;
+  
+  // Language code
+  string lang = 5;
+  
+  // Optional prompt text
+  optional string prompt = 6;
+}
+
+// Quality control metrics
+message QcMetrics {
+  // Signal-to-noise ratio in decibels
+  float snr_db = 1;
+  
+  // Percentage of clipped samples
+  float clipping_pct = 2;
+  
+  // Voice activity detection ratio
+  float vad_ratio = 3;
+}
+
+// Response to an upload
+message UploadResponse {
+  // Whether the upload was successful
+  bool success = 1;
+  
+  // Error message if unsuccessful
+  optional string error = 2;
+  
+  // Number of tokens awarded
+  uint32 tokens_awarded = 3;
+}
+
+// Request for upload status
+message UploadRequest {
+  // Recording ID to check
+  string recording_id = 1;
+}
+
+// Status of an upload
+message UploadStatus {
+  // Current status
+  enum Status {
+    PENDING = 0;
+    UPLOADING = 1;
+    COMPLETED = 2;
+    FAILED = 3;
+  }
+  
+  Status status = 1;
+  
+  // Progress percentage (0-100)
+  uint32 progress = 2;
+  
+  // Error message if failed
+  optional string error = 3;
+  
+  // Number of chunks uploaded
+  uint32 chunks_uploaded = 4;
+  
+  // Total number of chunks
+  uint32 total_chunks = 5;
+} 

@@ -1,0 +1,41 @@
+[package]
+name = "cowcow_cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Command-line tool for offline-first speech data collection"
+
+[dependencies]
+cowcow_core = { path = "../cowcow_core" }
+tokio.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+cpal.workspace = true
+hound.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+dirs.workspace = true
+indicatif.workspace = true
+
+# Configuration management
+toml.workspace = true
+
+# HTTP client for authentication
+reqwest.workspace = true
+
+# gRPC client for uploads
+tonic.workspace = true
+prost.workspace = true
+
+# Additional utilities
+serde_derive.workspace = true
+tokio-util.workspace = true
+rpassword.workspace = true
+chrono.workspace = true 
