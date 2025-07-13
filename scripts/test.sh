@@ -149,7 +149,7 @@ if [ $TESTS_FAILED -eq 0 ]; then
     echo -e "${GREEN}🎉 All tests passed! ($TESTS_PASSED/$TOTAL_TESTS)${NC}"
     echo ""
     echo -e "${PINK}╔═══════════════════════════════════════╗${NC}"
-    echo -e "${PINK}║   Your Cowcow installation is working!   ║${NC}"
+    echo -e "${PINK}║   Your Cowcow installation is working!║${NC}"
     echo -e "${PINK}╚═══════════════════════════════════════╝${NC}"
     echo ""
     echo "Next steps:"
