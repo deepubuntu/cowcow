@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT \n            COUNT(*) as total_recordings,\n            COUNT(CASE WHEN uploaded_at IS NOT NULL THEN 1 END) as uploaded_recordings,\n            COUNT(CASE WHEN uploaded_at IS NULL THEN 1 END) as pending_recordings\n        FROM recordings\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "total_recordings",
+        "ordinal": 0,
+        "type_info": "Int"
+      },
+      {
+        "name": "uploaded_recordings",
+        "ordinal": 1,
+        "type_info": "Int"
+      },
+      {
+        "name": "pending_recordings",
+        "ordinal": 2,
+        "type_info": "Int"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "09600c79a893400552dcf2dbe5c890d72acfdb4e1455afb67eb7595eeaf7d9d7"
+}
