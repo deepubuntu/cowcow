@@ -13,7 +13,42 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+PINK='\033[1;35m'
+MAGENTA='\033[0;35m'
 NC='\033[0m'
+
+# Beautiful loading bar function
+loading_bar() {
+    local message="$1"
+    local duration=${2:-3}
+    local width=50
+    
+    echo -e "${PINK}$message${NC}"
+    echo -e "${MAGENTA}....${NC}"
+    echo -e "${PINK}....${NC}"
+    echo -e "${RED}....${NC}"
+    echo -e "${MAGENTA}....${NC}"
+    echo ""
+    
+    local step=$((duration * 10))
+    local progress=0
+    
+    while [ $progress -le $width ]; do
+        printf "\r${PINK}["
+        for ((i=0; i<progress; i++)); do
+            printf "█"
+        done
+        for ((i=progress; i<width; i++)); do
+            printf "."
+        done
+        printf "]${NC} %d%%" $((progress * 2))
+        
+        progress=$((progress + 1))
+        sleep 0.06
+    done
+    echo ""
+    echo ""
+}
 
 # Helper functions
 success() { echo -e "${GREEN}✅ $1${NC}"; }
@@ -26,8 +61,7 @@ if [ ! -f "Cargo.toml" ] || [ ! -d "cowcow_cli" ]; then
     error "Please run this script from the cowcow project root directory"
 fi
 
-echo "📋 Step 1: Checking Prerequisites"
-echo "--------------------------------"
+loading_bar "📋 Checking Prerequisites..."
 
 # Check Rust installation
 if command -v cargo &> /dev/null; then
@@ -62,9 +96,7 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     fi
 fi
 
-echo ""
-echo "🔧 Step 2: Building Rust Components"
-echo "-----------------------------------"
+loading_bar "🔧 Building Rust Components..." 4
 
 # Clean previous builds
 info "Cleaning previous builds..."
@@ -88,9 +120,7 @@ else
     error "CLI binary not found at ./target/release/cowcow_cli"
 fi
 
-echo ""
-echo "🐍 Step 3: Setting Up Python Server"
-echo "-----------------------------------"
+loading_bar "🐍 Setting Up Python Server..." 3
 
 cd server || error "Server directory not found"
 
@@ -123,9 +153,7 @@ fi
 
 cd ..
 
-echo ""
-echo "✅ Step 4: Build Verification"
-echo "-----------------------------"
+loading_bar "✅ Running Build Verification..." 2
 
 # Test CLI binary
 info "Testing CLI binary..."
@@ -144,8 +172,8 @@ else
 fi
 
 echo ""
-echo "🎉 Build Complete!"
-echo "=================="
+echo -e "${PINK}🎉 Build Complete!${NC}"
+echo -e "${PINK}==================${NC}"
 echo ""
 echo "Next steps:"
 echo "1. Start the server: cd server && source .venv/bin/activate && uvicorn main:app --reload"
@@ -156,5 +184,9 @@ echo "For more information, see:"
 echo "- README.md for quick start"
 echo "- docs/SETUP.md for detailed setup"
 echo "- docs/TESTING.md for testing examples"
+echo ""
+echo -e "${PINK}╔═══════════════════════════════════════╗${NC}"
+echo -e "${PINK}║          Built with ❤️ by Thabhelo          ║${NC}"
+echo -e "${PINK}╚═══════════════════════════════════════╝${NC}"
 echo ""
 info "Build completed successfully! 🎊" 
