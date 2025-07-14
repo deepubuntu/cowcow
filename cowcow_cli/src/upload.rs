@@ -246,17 +246,20 @@ impl UploadClient {
 
                         successful_uploads += 1;
                         success = true;
-                        
+
                         // Display success message with tokens
                         if response.tokens_awarded > 0 {
-                            println!("✅ Upload complete! +{} tokens earned 🎉", response.tokens_awarded);
+                            println!(
+                                "✅ Upload complete! +{} tokens earned 🎉",
+                                response.tokens_awarded
+                            );
                             if let Some(message) = &response.message {
                                 println!("   {}", message);
                             }
                         } else {
                             println!("✅ Upload complete!");
                         }
-                        
+
                         info!("Successfully uploaded recording: {}", recording.id);
                     }
                     Err(e) => {
