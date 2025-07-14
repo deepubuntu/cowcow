@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -60,13 +61,37 @@ enum Commands {
 
     /// Export recordings to a directory
     Export {
-        /// Export format (jsonl, wav, or both)
+        /// Export format (json, wav, or both)
         #[arg(short, long)]
         format: String,
 
         /// Destination directory
         #[arg(short, long)]
         dest: PathBuf,
+
+        /// Filter by language code (e.g., "en", "sw")
+        #[arg(long)]
+        lang: Option<String>,
+
+        /// Filter by upload status (uploaded, pending, failed)
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Minimum SNR in dB
+        #[arg(long)]
+        min_snr: Option<f32>,
+
+        /// Maximum clipping percentage
+        #[arg(long)]
+        max_clipping: Option<f32>,
+
+        /// Minimum VAD ratio
+        #[arg(long)]
+        min_vad: Option<f32>,
+
+        /// Export recordings from this many days ago
+        #[arg(long, default_value = "30")]
+        days: u32,
     },
 
     /// Authentication commands
@@ -79,6 +104,12 @@ enum Commands {
     Config {
         #[command(subcommand)]
         command: ConfigCommands,
+    },
+
+    /// Token management commands
+    Tokens {
+        #[command(subcommand)]
+        command: TokensCommands,
     },
 }
 
@@ -115,6 +146,19 @@ enum ConfigCommands {
     Reset,
 }
 
+#[derive(Subcommand)]
+enum TokensCommands {
+    /// Show current token balance
+    Balance,
+
+    /// Show token transaction history
+    History {
+        /// Show transactions from this many days ago
+        #[arg(short, long, default_value = "30")]
+        days: u32,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
@@ -147,15 +191,18 @@ async fn main() -> Result<()> {
         Commands::Doctor => {
             check_health(&config).await?;
         }
-        Commands::Export { format, dest } => {
+        Commands::Export { format, dest, lang, status, min_snr, max_clipping, min_vad, days } => {
             let db = init_db(&config).await?;
-            export_recordings(format, dest, &db).await?;
+            export_recordings(format, dest, lang, status, min_snr, max_clipping, min_vad, days, &db).await?;
         }
         Commands::Auth { command } => {
             handle_auth_command(command, &config).await?;
         }
         Commands::Config { command } => {
             handle_config_command(command, &config).await?;
+        }
+        Commands::Tokens { command } => {
+            handle_tokens_command(command, &config).await?;
         }
     }
 
@@ -568,11 +615,176 @@ async fn check_health(config: &Config) -> Result<()> {
     Ok(())
 }
 
-async fn export_recordings(format: String, dest: PathBuf, _db: &SqlitePool) -> Result<()> {
-    // TODO: Implement export functionality
-    info!("Export functionality not yet implemented");
-    println!("Export format: {format}");
-    println!("Destination: {}", dest.display());
+async fn export_recordings(
+    format: String, 
+    dest: PathBuf, 
+    lang: Option<String>,
+    status: Option<String>,
+    min_snr: Option<f32>,
+    max_clipping: Option<f32>,
+    min_vad: Option<f32>,
+    days: u32,
+    db: &SqlitePool
+) -> Result<()> {
+    use std::fs;
+    
+    // Create destination directory if it doesn't exist
+    fs::create_dir_all(&dest).context("Failed to create destination directory")?;
+    
+    // Build query with filters
+    let mut query = String::from("SELECT * FROM recordings WHERE 1=1");
+    let mut params: Vec<String> = Vec::new();
+    
+    // Language filter
+    if let Some(lang_filter) = &lang {
+        query.push_str(" AND lang = ?");
+        params.push(lang_filter.clone());
+    }
+    
+    // Status filter
+    match status.as_deref() {
+        Some("uploaded") => {
+            query.push_str(" AND uploaded_at IS NOT NULL");
+        }
+        Some("pending") => {
+            query.push_str(" AND uploaded_at IS NULL");
+        }
+        Some("failed") => {
+            query.push_str(" AND id IN (SELECT recording_id FROM upload_queue WHERE attempts > 0)");
+        }
+        _ => {}
+    }
+    
+    // Date filter
+    let start_timestamp = chrono::Utc::now().timestamp() - (days as i64 * 24 * 60 * 60);
+    query.push_str(" AND created_at >= ?");
+    params.push(start_timestamp.to_string());
+    
+    query.push_str(" ORDER BY created_at DESC");
+    
+    // Execute query
+    let mut query_builder = sqlx::query_as::<_, (String, String, Option<String>, String, i64, Option<i64>, String)>(&query);
+    
+    for param in &params {
+        query_builder = query_builder.bind(param);
+    }
+    
+    let recordings = query_builder.fetch_all(db).await.context("Failed to fetch recordings")?;
+    
+    // Filter by QC metrics
+    let mut filtered_recordings = Vec::new();
+    for recording in recordings {
+        let qc_metrics: serde_json::Value = serde_json::from_str(&recording.3)
+            .context("Failed to parse QC metrics")?;
+        
+        let snr = qc_metrics.get("snr_db").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        let clipping = qc_metrics.get("clipping_pct").and_then(|v| v.as_f64()).unwrap_or(100.0) as f32;
+        let vad = qc_metrics.get("vad_ratio").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        
+        // Apply QC filters
+        if let Some(min_snr_val) = min_snr {
+            if snr < min_snr_val {
+                continue;
+            }
+        }
+        
+        if let Some(max_clipping_val) = max_clipping {
+            if clipping > max_clipping_val {
+                continue;
+            }
+        }
+        
+        if let Some(min_vad_val) = min_vad {
+            if vad < min_vad_val {
+                continue;
+            }
+        }
+        
+        filtered_recordings.push(recording);
+    }
+    
+    if filtered_recordings.is_empty() {
+        println!("No recordings found matching the specified criteria.");
+        return Ok(());
+    }
+    
+    println!("Found {} recordings matching criteria", filtered_recordings.len());
+    
+    // Export based on format
+    match format.as_str() {
+        "json" => {
+            export_json(&filtered_recordings, &dest).await?;
+        }
+        "wav" => {
+            export_wav(&filtered_recordings, &dest).await?;
+        }
+        "both" => {
+            export_json(&filtered_recordings, &dest).await?;
+            export_wav(&filtered_recordings, &dest).await?;
+        }
+        _ => {
+            return Err(anyhow::anyhow!("Invalid format. Use 'json', 'wav', or 'both'"));
+        }
+    }
+    
+    println!("✅ Export completed to: {}", dest.display());
+    Ok(())
+}
+
+async fn export_json(recordings: &[(String, String, Option<String>, String, i64, Option<i64>, String)], dest: &Path) -> Result<()> {
+    use std::fs::File;
+    use std::io::Write;
+    
+    let json_path = dest.join("recordings.json");
+    let mut file = File::create(&json_path).context("Failed to create JSON file")?;
+    
+    writeln!(file, "[")?;
+    
+    for (i, recording) in recordings.iter().enumerate() {
+        let qc_metrics: serde_json::Value = serde_json::from_str(&recording.3)?;
+        
+        let record = serde_json::json!({
+            "id": recording.0,
+            "lang": recording.1,
+            "prompt": recording.2,
+            "qc_metrics": qc_metrics,
+            "created_at": recording.4,
+            "uploaded_at": recording.5,
+            "wav_path": recording.6
+        });
+        
+        if i == recordings.len() - 1 {
+            writeln!(file, "  {}", serde_json::to_string_pretty(&record)?)?;
+        } else {
+            writeln!(file, "  {},", serde_json::to_string_pretty(&record)?)?;
+        }
+    }
+    
+    writeln!(file, "]")?;
+    println!("📄 JSON export: {}", json_path.display());
+    Ok(())
+}
+
+async fn export_wav(recordings: &[(String, String, Option<String>, String, i64, Option<i64>, String)], dest: &Path) -> Result<()> {
+    use std::fs;
+    
+    let wav_dir = dest.join("recordings");
+    fs::create_dir_all(&wav_dir).context("Failed to create WAV directory")?;
+    
+    let mut copied_files = 0;
+    
+    for recording in recordings {
+        let source_path = Path::new(&recording.6);
+        if source_path.exists() {
+            let filename = format!("{}_{}.wav", recording.1, recording.0);
+            let dest_path = wav_dir.join(&filename);
+            
+            fs::copy(source_path, &dest_path).context("Failed to copy WAV file")?;
+            copied_files += 1;
+        }
+    }
+    
+    println!("🎵 WAV export: {} files copied to {}", copied_files, wav_dir.display());
     Ok(())
 }
 
@@ -625,14 +837,59 @@ async fn handle_config_command(command: ConfigCommands, config: &Config) -> Resu
             println!("{config_toml}");
         }
         ConfigCommands::Set { key, value } => {
-            println!("Setting {key}: {value}");
-            // TODO: Implement config setting
-            println!("Config setting not yet implemented");
+            let mut config_copy = config.clone();
+            match config_copy.set_value(&key, &value) {
+                Ok(_) => {
+                    config_copy.save()?;
+                    println!("✅ Configuration updated: {} = {}", key, value);
+                }
+                Err(e) => {
+                    println!("❌ Failed to set configuration: {}", e);
+                    println!("Available keys:");
+                    for available_key in Config::get_available_keys() {
+                        println!("  - {}", available_key);
+                    }
+                }
+            }
         }
         ConfigCommands::Reset => {
             let default_config = Config::default();
             default_config.save()?;
             println!("✅ Configuration reset to defaults");
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_tokens_command(command: TokensCommands, config: &Config) -> Result<()> {
+    let auth_client = AuthClient::new(config.clone());
+
+    match command {
+        TokensCommands::Balance => {
+            let balance = auth_client.get_token_balance().await?;
+            println!("💰 Token Balance Summary:");
+            println!("  Current Balance: {} tokens", balance.balance);
+            println!("  Total Earned: {} tokens", balance.total_earned);
+            println!("  Total Spent: {} tokens", balance.total_spent);
+        }
+        TokensCommands::History { days } => {
+            let history = auth_client.get_token_history(days).await?;
+            println!("📜 Token Transaction History (last {} days):", days);
+            
+            if history.is_empty() {
+                println!("  No transactions found.");
+            } else {
+                for tx in history {
+                    println!("  {} | {} | {:+} tokens | Balance: {} | {}", 
+                        tx.date.format("%Y-%m-%d %H:%M:%S"), 
+                        tx.transaction_type, 
+                        tx.amount, 
+                        tx.balance, 
+                        tx.notes
+                    );
+                }
+            }
         }
     }
 

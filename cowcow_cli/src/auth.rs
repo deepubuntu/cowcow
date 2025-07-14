@@ -3,6 +3,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, info, warn};
+use chrono::{DateTime, Utc};
 
 use crate::config::{Config, Credentials};
 
@@ -32,6 +33,23 @@ pub struct RegisterResponse {
     pub username: String,
     pub email: String,
     pub api_key: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenBalance {
+    pub balance: u32,
+    pub total_earned: u32,
+    pub total_spent: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TokenTransaction {
+    pub id: String,
+    pub transaction_type: String,
+    pub amount: i32,
+    pub balance: u32,
+    pub date: DateTime<Utc>,
+    pub notes: String,
 }
 
 pub struct AuthClient {
@@ -158,23 +176,60 @@ impl AuthClient {
     }
 
     pub async fn health_check(&self) -> Result<()> {
-        let health_url = format!("{}/health", self.config.api.endpoint);
-
         let response = self
             .client
-            .get(&health_url)
+            .get(&format!("{}/health", self.config.api.endpoint))
             .send()
             .await
-            .with_context(|| format!("Failed to connect to {health_url}"))?;
+            .context("Failed to connect to server")?;
 
         if response.status().is_success() {
             info!("Server health check passed");
             Ok(())
         } else {
-            Err(anyhow::anyhow!(
-                "Server health check failed: {}",
-                response.status()
-            ))
+            error!("Server health check failed: {}", response.status());
+            Err(anyhow::anyhow!("Server health check failed"))
+        }
+    }
+
+    pub async fn get_token_balance(&self) -> Result<TokenBalance> {
+        let credentials = self.check_auth().await?;
+        
+        let response = self
+            .client
+            .get(&format!("{}/tokens/balance", self.config.api.endpoint))
+            .bearer_auth(credentials.access_token.context("No access token")?)
+            .send()
+            .await
+            .context("Failed to get token balance")?;
+
+        if response.status().is_success() {
+            let balance = response.json::<TokenBalance>().await.context("Failed to parse token balance response")?;
+            Ok(balance)
+        } else {
+            error!("Failed to get token balance: {}", response.status());
+            Err(anyhow::anyhow!("Failed to get token balance"))
+        }
+    }
+
+    pub async fn get_token_history(&self, days: u32) -> Result<Vec<TokenTransaction>> {
+        let credentials = self.check_auth().await?;
+        
+        let response = self
+            .client
+            .get(&format!("{}/tokens/history", self.config.api.endpoint))
+            .bearer_auth(credentials.access_token.context("No access token")?)
+            .query(&[("days", days)])
+            .send()
+            .await
+            .context("Failed to get token history")?;
+
+        if response.status().is_success() {
+            let history = response.json::<Vec<TokenTransaction>>().await.context("Failed to parse token history response")?;
+            Ok(history)
+        } else {
+            error!("Failed to get token history: {}", response.status());
+            Err(anyhow::anyhow!("Failed to get token history"))
         }
     }
 }
