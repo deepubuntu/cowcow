@@ -22,6 +22,7 @@ pub struct UploadResponse {
     pub status: String,
     pub tokens_awarded: u32,
     pub recording_id: String,
+    pub message: Option<String>,
 }
 
 pub struct UploadClient {
@@ -226,7 +227,7 @@ impl UploadClient {
                     )
                     .await
                 {
-                    Ok(_) => {
+                    Ok(response) => {
                         // Mark as uploaded
                         let now = chrono::Utc::now().timestamp();
                         sqlx::query("UPDATE recordings SET uploaded_at = ? WHERE id = ?")
@@ -245,6 +246,17 @@ impl UploadClient {
 
                         successful_uploads += 1;
                         success = true;
+                        
+                        // Display success message with tokens
+                        if response.tokens_awarded > 0 {
+                            println!("✅ Upload complete! +{} tokens earned 🎉", response.tokens_awarded);
+                            if let Some(message) = &response.message {
+                                println!("   {}", message);
+                            }
+                        } else {
+                            println!("✅ Upload complete!");
+                        }
+                        
                         info!("Successfully uploaded recording: {}", recording.id);
                     }
                     Err(e) => {

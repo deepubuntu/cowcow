@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 import grpc
 import json
+import uuid
 
 from cowcow_pb2 import (
     Chunk,
@@ -213,23 +214,67 @@ class UploadServiceImpl(UploadServiceBase):
 class RewardServiceImpl(RewardServiceBase):
     async def GetBalance(self, request: BalanceRequest) -> BalanceResponse:
         """Get the token balance for a contributor."""
-        # TODO: Implement balance lookup from database
-        return BalanceResponse(
-            balance=0,
-            total_earned=0,
-            total_spent=0,
-        )
+        db = next(get_db())
+        try:
+            # Get user from contributor_id (assuming it's user_id)
+            user = db.query(User).filter(User.id == int(request.contributor_id)).first()
+            if not user:
+                raise Exception(f"User not found: {request.contributor_id}")
+            
+            # Calculate balance from tokens table
+            tokens = db.query(Token).filter(Token.user_id == user.id).all()
+            
+            total_earned = sum(token.amount for token in tokens if token.amount > 0)
+            total_spent = sum(abs(token.amount) for token in tokens if token.amount < 0)
+            balance = total_earned - total_spent
+            
+            return BalanceResponse(
+                balance=balance,
+                total_earned=total_earned,
+                total_spent=total_spent,
+            )
+        finally:
+            db.close()
     
     async def GetHistory(self, request: HistoryRequest):
         """Get the transaction history for a contributor."""
-        # TODO: Implement history lookup from database
-        yield Transaction(
-            transaction_id="example",
-            type=Transaction.Type.EARNED,
-            amount=3,
-            timestamp=int(datetime.utcnow().timestamp()),
-            description="Recording upload",
-        )
+        db = next(get_db())
+        try:
+            # Get user from contributor_id (assuming it's user_id)
+            user = db.query(User).filter(User.id == int(request.contributor_id)).first()
+            if not user:
+                raise Exception(f"User not found: {request.contributor_id}")
+            
+            # Build query with optional time filtering
+            query = db.query(Token).filter(Token.user_id == user.id)
+            
+            if request.start_time:
+                start_dt = datetime.fromtimestamp(request.start_time)
+                query = query.filter(Token.created_at >= start_dt)
+            
+            if request.end_time:
+                end_dt = datetime.fromtimestamp(request.end_time)
+                query = query.filter(Token.created_at <= end_dt)
+            
+            # Order by most recent first
+            tokens = query.order_by(Token.created_at.desc()).all()
+            
+            # Calculate running balance for each transaction
+            running_balance = 0
+            for token in reversed(tokens):  # Calculate from oldest to newest
+                running_balance += token.amount
+            
+            # Yield transactions in reverse order (newest first)
+            for token in tokens:
+                yield Transaction(
+                    transaction_id=token.id,
+                    type=Transaction.Type.EARNED if token.amount > 0 else Transaction.Type.SPENT,
+                    amount=token.amount,
+                    timestamp=int(token.created_at.timestamp()),
+                    description=token.description or f"{token.type} transaction",
+                )
+        finally:
+            db.close()
 
 # REST API endpoints
 @app.post("/recordings/upload")
@@ -238,95 +283,66 @@ async def upload_recording(
     lang: str = Form(...),
     qc_metrics: str = Form(...),
     file_path: str = Form(...),
-    file: UploadFile = File(...),
     current_user: User = Depends(get_current_user_multi_auth),
     db: Session = Depends(get_db)
 ):
-    """Upload a recording and process QC metrics."""
+    """Upload a recording and award tokens based on quality."""
     try:
-        # Save the uploaded file
-        upload_path = os.path.join(UPLOAD_DIR, f"{recording_id}.wav")
-        with open(upload_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-        
-        # Check if recording already exists
-        existing_recording = db.query(Recording).filter(Recording.id == recording_id).first()
-        if existing_recording:
-            # Update existing recording with uploaded file
-            existing_recording.file_path = upload_path
-            existing_recording.status = "processing"
-            recording = existing_recording
-        else:
-            # Create new recording record
-            recording = Recording(
-                id=recording_id,
-                user_id=current_user.id,
-                lang=lang,
-                qc_metrics=qc_metrics,
-                file_path=upload_path,
-                status="processing"
-            )
-            db.add(recording)
-        
-        db.commit()
-        db.refresh(recording)
-
-        # Process QC metrics
+        # Parse QC metrics
         metrics = json.loads(qc_metrics)
         
-        # Calculate duration from uploaded file
-        import wave
-        try:
-            with wave.open(upload_path, 'rb') as wav_file:
-                frames = wav_file.getnframes()
-                sample_rate = wav_file.getframerate()
-                duration = frames / sample_rate
-        except Exception as e:
-            # Fallback: estimate duration from file size (approximate)
-            file_size = os.path.getsize(upload_path)
-            # Rough estimate: 16-bit mono at 48kHz ≈ 96kB per second
-            duration = (file_size - 44) / (48000 * 2)  # Subtract WAV header, assume 16-bit mono
+        # Save recording to database
+        recording = Recording(
+            id=recording_id,
+            user_id=current_user.id,
+            lang=lang,
+            qc_metrics=qc_metrics,
+            file_path=file_path,
+            status="completed"
+        )
+        db.add(recording)
         
-        if duration >= MIN_RECORDING_LENGTH:
-            # Calculate tokens based on duration
-            tokens = int((duration / 60) * TOKENS_PER_MINUTE)
-            
-            # Add tokens to user's balance
-            token = Token(
-                id=recording_id,
-                user_id=current_user.id,
-                amount=tokens,
-                type="recording",
-                description=f"Recording reward for {duration:.1f}s clip",
-                recording_id=recording_id
-            )
-            db.add(token)
-            
-            # Update recording status
-            recording.status = "completed"
-            recording.uploaded_at = datetime.utcnow()
-            
-            db.commit()
-            
-            return {
-                "status": "success",
-                "tokens_awarded": tokens,
-                "recording_id": recording_id
-            }
-        else:
-            recording.status = "failed"
-            db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Recording too short"
-            )
+        # Calculate token reward based on QC metrics
+        base_tokens = TOKENS_PER_MINUTE  # Base reward
+        
+        # Bonus for high quality
+        snr_db = metrics.get("snr_db", 0)
+        clipping_pct = metrics.get("clipping_pct", 100)
+        vad_ratio = metrics.get("vad_ratio", 0)
+        
+        bonus_tokens = 0
+        if snr_db > 20:  # High SNR bonus
+            bonus_tokens += 2
+        if clipping_pct < 1:  # Low clipping bonus
+            bonus_tokens += 1
+        if vad_ratio > 0.3:  # Good voice activity bonus
+            bonus_tokens += 1
+        
+        total_tokens = base_tokens + bonus_tokens
+        
+        # Award tokens
+        token_record = Token(
+            id=str(uuid.uuid4()),
+            user_id=current_user.id,
+            amount=total_tokens,
+            type="recording",
+            description=f"Recording upload: {lang} (SNR: {snr_db:.1f}dB, Clipping: {clipping_pct:.1f}%)",
+            recording_id=recording_id
+        )
+        db.add(token_record)
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "recording_id": recording_id,
+            "tokens_awarded": total_tokens,
+            "message": f"Recording uploaded successfully! Earned {total_tokens} tokens."
+        }
+        
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/recordings")
 async def list_recordings(
@@ -345,25 +361,58 @@ async def get_token_balance(
     current_user: User = Depends(get_current_user_multi_auth),
     db: Session = Depends(get_db)
 ):
-    """Get user's token balance."""
-    tokens = db.query(Token).filter(
-        Token.user_id == current_user.id
-    ).all()
+    """Get the current token balance for the authenticated user."""
+    # Calculate balance from tokens table
+    tokens = db.query(Token).filter(Token.user_id == current_user.id).all()
     
-    balance = sum(token.amount for token in tokens)
-    return {"balance": balance}
+    total_earned = sum(token.amount for token in tokens if token.amount > 0)
+    total_spent = sum(abs(token.amount) for token in tokens if token.amount < 0)
+    balance = total_earned - total_spent
+    
+    return {
+        "balance": balance,
+        "total_earned": total_earned,
+        "total_spent": total_spent
+    }
 
 @app.get("/tokens/history")
 async def get_token_history(
+    days: int = 30,
     current_user: User = Depends(get_current_user_multi_auth),
     db: Session = Depends(get_db)
 ):
-    """Get user's token transaction history."""
+    """Get the token transaction history for the authenticated user."""
+    # Calculate start date
+    start_date = datetime.utcnow() - timedelta(days=days)
+    
+    # Query tokens with date filtering
     tokens = db.query(Token).filter(
-        Token.user_id == current_user.id
+        Token.user_id == current_user.id,
+        Token.created_at >= start_date
     ).order_by(Token.created_at.desc()).all()
     
-    return tokens
+    # Convert to API response format
+    transactions = []
+    for token in tokens:
+        transactions.append({
+            "id": token.id,
+            "transaction_type": token.type,
+            "amount": token.amount,
+            "balance": 0,  # Will be calculated below
+            "date": token.created_at.isoformat(),
+            "notes": token.description or f"{token.type} transaction"
+        })
+    
+    # Calculate running balance for each transaction
+    # Start with current balance and work backwards
+    all_tokens = db.query(Token).filter(Token.user_id == current_user.id).all()
+    current_balance = sum(token.amount for token in all_tokens)
+    
+    for transaction in transactions:
+        transaction["balance"] = current_balance
+        current_balance -= transaction["amount"]
+    
+    return transactions
 
 @app.get("/health")
 async def health_check():
