@@ -1,9 +1,23 @@
 use std::path::Path;
-use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+
+type RecordingRow = (String, String, Option<String>, String, i64, Option<i64>, String);
+
+#[derive(Debug)]
+struct ExportConfig {
+    format: String,
+    dest: PathBuf,
+    lang: Option<String>,
+    status: Option<String>,
+    min_snr: Option<f32>,
+    max_clipping: Option<f32>,
+    min_vad: Option<f32>,
+    days: u32,
+}
+
 use clap::{Parser, Subcommand};
 use cowcow_core::{AudioProcessor, QcMetrics};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -203,7 +217,7 @@ async fn main() -> Result<()> {
             days,
         } => {
             let db = init_db(&config).await?;
-            export_recordings(
+            let export_config = ExportConfig {
                 format,
                 dest,
                 lang,
@@ -212,9 +226,8 @@ async fn main() -> Result<()> {
                 max_clipping,
                 min_vad,
                 days,
-                &db,
-            )
-            .await?;
+            };
+            export_recordings(export_config, &db).await?;
         }
         Commands::Auth { command } => {
             handle_auth_command(command, &config).await?;
@@ -637,33 +650,26 @@ async fn check_health(config: &Config) -> Result<()> {
 }
 
 async fn export_recordings(
-    format: String,
-    dest: PathBuf,
-    lang: Option<String>,
-    status: Option<String>,
-    min_snr: Option<f32>,
-    max_clipping: Option<f32>,
-    min_vad: Option<f32>,
-    days: u32,
+    config: ExportConfig,
     db: &SqlitePool,
 ) -> Result<()> {
     use std::fs;
 
     // Create destination directory if it doesn't exist
-    fs::create_dir_all(&dest).context("Failed to create destination directory")?;
+    fs::create_dir_all(&config.dest).context("Failed to create destination directory")?;
 
     // Build query with filters
     let mut query = String::from("SELECT * FROM recordings WHERE 1=1");
     let mut params: Vec<String> = Vec::new();
 
     // Language filter
-    if let Some(lang_filter) = &lang {
+    if let Some(lang_filter) = &config.lang {
         query.push_str(" AND lang = ?");
         params.push(lang_filter.clone());
     }
 
     // Status filter
-    match status.as_deref() {
+    match config.status.as_deref() {
         Some("uploaded") => {
             query.push_str(" AND uploaded_at IS NOT NULL");
         }
@@ -677,25 +683,14 @@ async fn export_recordings(
     }
 
     // Date filter
-    let start_timestamp = chrono::Utc::now().timestamp() - (days as i64 * 24 * 60 * 60);
+    let start_timestamp = chrono::Utc::now().timestamp() - (config.days as i64 * 24 * 60 * 60);
     query.push_str(" AND created_at >= ?");
     params.push(start_timestamp.to_string());
 
     query.push_str(" ORDER BY created_at DESC");
 
     // Execute query
-    let mut query_builder = sqlx::query_as::<
-        _,
-        (
-            String,
-            String,
-            Option<String>,
-            String,
-            i64,
-            Option<i64>,
-            String,
-        ),
-    >(&query);
+    let mut query_builder = sqlx::query_as::<_, RecordingRow>(&query);
 
     for param in &params {
         query_builder = query_builder.bind(param);
@@ -726,19 +721,19 @@ async fn export_recordings(
             .unwrap_or(0.0) as f32;
 
         // Apply QC filters
-        if let Some(min_snr_val) = min_snr {
+        if let Some(min_snr_val) = config.min_snr {
             if snr < min_snr_val {
                 continue;
             }
         }
 
-        if let Some(max_clipping_val) = max_clipping {
+        if let Some(max_clipping_val) = config.max_clipping {
             if clipping > max_clipping_val {
                 continue;
             }
         }
 
-        if let Some(min_vad_val) = min_vad {
+        if let Some(min_vad_val) = config.min_vad {
             if vad < min_vad_val {
                 continue;
             }
@@ -758,16 +753,16 @@ async fn export_recordings(
     );
 
     // Export based on format
-    match format.as_str() {
+    match config.format.as_str() {
         "json" => {
-            export_json(&filtered_recordings, &dest).await?;
+            export_json(&filtered_recordings, &config.dest).await?;
         }
         "wav" => {
-            export_wav(&filtered_recordings, &dest).await?;
+            export_wav(&filtered_recordings, &config.dest).await?;
         }
         "both" => {
-            export_json(&filtered_recordings, &dest).await?;
-            export_wav(&filtered_recordings, &dest).await?;
+            export_json(&filtered_recordings, &config.dest).await?;
+            export_wav(&filtered_recordings, &config.dest).await?;
         }
         _ => {
             return Err(anyhow::anyhow!(
@@ -776,20 +771,12 @@ async fn export_recordings(
         }
     }
 
-    println!("✅ Export completed to: {}", dest.display());
+    println!("✅ Export completed to: {}", config.dest.display());
     Ok(())
 }
 
 async fn export_json(
-    recordings: &[(
-        String,
-        String,
-        Option<String>,
-        String,
-        i64,
-        Option<i64>,
-        String,
-    )],
+    recordings: &[RecordingRow],
     dest: &Path,
 ) -> Result<()> {
     use std::fs::File;
@@ -826,15 +813,7 @@ async fn export_json(
 }
 
 async fn export_wav(
-    recordings: &[(
-        String,
-        String,
-        Option<String>,
-        String,
-        i64,
-        Option<i64>,
-        String,
-    )],
+    recordings: &[RecordingRow],
     dest: &Path,
 ) -> Result<()> {
     use std::fs;
@@ -916,13 +895,13 @@ async fn handle_config_command(command: ConfigCommands, config: &Config) -> Resu
             match config_copy.set_value(&key, &value) {
                 Ok(_) => {
                     config_copy.save()?;
-                    println!("✅ Configuration updated: {} = {}", key, value);
+                    println!("✅ Configuration updated: {key} = {value}");
                 }
                 Err(e) => {
-                    println!("❌ Failed to set configuration: {}", e);
+                    println!("❌ Failed to set configuration: {e}");
                     println!("Available keys:");
                     for available_key in Config::get_available_keys() {
-                        println!("  - {}", available_key);
+                        println!("  - {available_key}");
                     }
                 }
             }
@@ -950,7 +929,7 @@ async fn handle_tokens_command(command: TokensCommands, config: &Config) -> Resu
         }
         TokensCommands::History { days } => {
             let history = auth_client.get_token_history(days).await?;
-            println!("📜 Token Transaction History (last {} days):", days);
+            println!("📜 Token Transaction History (last {days} days):");
 
             if history.is_empty() {
                 println!("  No transactions found.");

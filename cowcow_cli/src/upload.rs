@@ -254,7 +254,7 @@ impl UploadClient {
                                 response.tokens_awarded
                             );
                             if let Some(message) = &response.message {
-                                println!("   {}", message);
+                                println!("   {message}");
                             }
                         } else {
                             println!("✅ Upload complete!");

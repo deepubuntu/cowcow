@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -179,7 +178,7 @@ impl AuthClient {
     pub async fn health_check(&self) -> Result<()> {
         let response = self
             .client
-            .get(&format!("{}/health", self.config.api.endpoint))
+            .get(format!("{}/health", self.config.api.endpoint))
             .send()
             .await
             .context("Failed to connect to server")?;
@@ -198,7 +197,7 @@ impl AuthClient {
 
         let response = self
             .client
-            .get(&format!("{}/tokens/balance", self.config.api.endpoint))
+            .get(format!("{}/tokens/balance", self.config.api.endpoint))
             .bearer_auth(credentials.access_token.context("No access token")?)
             .send()
             .await
@@ -221,7 +220,7 @@ impl AuthClient {
 
         let response = self
             .client
-            .get(&format!("{}/tokens/history", self.config.api.endpoint))
+            .get(format!("{}/tokens/history", self.config.api.endpoint))
             .bearer_auth(credentials.access_token.context("No access token")?)
             .query(&[("days", days)])
             .send()
