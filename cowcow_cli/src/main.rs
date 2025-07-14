@@ -4,7 +4,15 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 
-type RecordingRow = (String, String, Option<String>, String, i64, Option<i64>, String);
+type RecordingRow = (
+    String,
+    String,
+    Option<String>,
+    String,
+    i64,
+    Option<i64>,
+    String,
+);
 
 #[derive(Debug)]
 struct ExportConfig {
@@ -649,10 +657,7 @@ async fn check_health(config: &Config) -> Result<()> {
     Ok(())
 }
 
-async fn export_recordings(
-    config: ExportConfig,
-    db: &SqlitePool,
-) -> Result<()> {
+async fn export_recordings(config: ExportConfig, db: &SqlitePool) -> Result<()> {
     use std::fs;
 
     // Create destination directory if it doesn't exist
@@ -775,10 +780,7 @@ async fn export_recordings(
     Ok(())
 }
 
-async fn export_json(
-    recordings: &[RecordingRow],
-    dest: &Path,
-) -> Result<()> {
+async fn export_json(recordings: &[RecordingRow], dest: &Path) -> Result<()> {
     use std::fs::File;
     use std::io::Write;
 
@@ -812,10 +814,7 @@ async fn export_json(
     Ok(())
 }
 
-async fn export_wav(
-    recordings: &[RecordingRow],
-    dest: &Path,
-) -> Result<()> {
+async fn export_wav(recordings: &[RecordingRow], dest: &Path) -> Result<()> {
     use std::fs;
 
     let wav_dir = dest.join("recordings");
