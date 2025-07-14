@@ -142,7 +142,9 @@ impl Config {
     pub fn validate(&self) -> Result<()> {
         // Validate API endpoint
         if !self.api.endpoint.starts_with("http://") && !self.api.endpoint.starts_with("https://") {
-            return Err(anyhow::anyhow!("API endpoint must start with http:// or https://"));
+            return Err(anyhow::anyhow!(
+                "API endpoint must start with http:// or https://"
+            ));
         }
 
         // Validate timeout
@@ -166,64 +168,78 @@ impl Config {
         match key {
             "api.endpoint" => {
                 if !value.starts_with("http://") && !value.starts_with("https://") {
-                    return Err(anyhow::anyhow!("API endpoint must start with http:// or https://"));
+                    return Err(anyhow::anyhow!(
+                        "API endpoint must start with http:// or https://"
+                    ));
                 }
                 self.api.endpoint = value.to_string();
             }
             "api.timeout_secs" => {
-                self.api.timeout_secs = value.parse::<u64>()
+                self.api.timeout_secs = value
+                    .parse::<u64>()
                     .context("Invalid timeout value, must be a positive integer")?;
             }
             "storage.auto_upload" => {
-                self.storage.auto_upload = value.parse::<bool>()
+                self.storage.auto_upload = value
+                    .parse::<bool>()
                     .context("Invalid auto_upload value, must be true or false")?;
             }
             "audio.sample_rate" => {
-                self.audio.sample_rate = value.parse::<u32>()
+                self.audio.sample_rate = value
+                    .parse::<u32>()
                     .context("Invalid sample rate, must be a positive integer")?;
             }
             "audio.channels" => {
-                self.audio.channels = value.parse::<u16>()
+                self.audio.channels = value
+                    .parse::<u16>()
                     .context("Invalid channel count, must be a positive integer")?;
             }
             "audio.min_snr_db" => {
-                self.audio.min_snr_db = value.parse::<f32>()
+                self.audio.min_snr_db = value
+                    .parse::<f32>()
                     .context("Invalid SNR value, must be a number")?;
             }
             "audio.max_clipping_pct" => {
-                self.audio.max_clipping_pct = value.parse::<f32>()
+                self.audio.max_clipping_pct = value
+                    .parse::<f32>()
                     .context("Invalid clipping percentage, must be a number between 0 and 100")?;
                 if self.audio.max_clipping_pct < 0.0 || self.audio.max_clipping_pct > 100.0 {
-                    return Err(anyhow::anyhow!("Clipping percentage must be between 0 and 100"));
+                    return Err(anyhow::anyhow!(
+                        "Clipping percentage must be between 0 and 100"
+                    ));
                 }
             }
             "audio.min_vad_ratio" => {
-                self.audio.min_vad_ratio = value.parse::<f32>()
+                self.audio.min_vad_ratio = value
+                    .parse::<f32>()
                     .context("Invalid VAD ratio, must be a number between 0 and 1")?;
                 if self.audio.min_vad_ratio < 0.0 || self.audio.min_vad_ratio > 1.0 {
                     return Err(anyhow::anyhow!("VAD ratio must be between 0 and 1"));
                 }
             }
             "upload.max_retries" => {
-                self.upload.max_retries = value.parse::<u32>()
+                self.upload.max_retries = value
+                    .parse::<u32>()
                     .context("Invalid max retries, must be a positive integer")?;
             }
             "upload.retry_delay_secs" => {
-                self.upload.retry_delay_secs = value.parse::<u64>()
+                self.upload.retry_delay_secs = value
+                    .parse::<u64>()
                     .context("Invalid retry delay, must be a positive integer")?;
             }
             "upload.chunk_size" => {
-                self.upload.chunk_size = value.parse::<usize>()
+                self.upload.chunk_size = value
+                    .parse::<usize>()
                     .context("Invalid chunk size, must be a positive integer")?;
             }
             _ => {
                 return Err(anyhow::anyhow!("Unknown configuration key: {}", key));
             }
         }
-        
+
         // Validate the configuration after setting the value
         self.validate()?;
-        
+
         Ok(())
     }
 

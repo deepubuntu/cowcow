@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{error, info, warn};
-use chrono::{DateTime, Utc};
 
 use crate::config::{Config, Credentials};
 
@@ -194,7 +194,7 @@ impl AuthClient {
 
     pub async fn get_token_balance(&self) -> Result<TokenBalance> {
         let credentials = self.check_auth().await?;
-        
+
         let response = self
             .client
             .get(&format!("{}/tokens/balance", self.config.api.endpoint))
@@ -204,7 +204,10 @@ impl AuthClient {
             .context("Failed to get token balance")?;
 
         if response.status().is_success() {
-            let balance = response.json::<TokenBalance>().await.context("Failed to parse token balance response")?;
+            let balance = response
+                .json::<TokenBalance>()
+                .await
+                .context("Failed to parse token balance response")?;
             Ok(balance)
         } else {
             error!("Failed to get token balance: {}", response.status());
@@ -214,7 +217,7 @@ impl AuthClient {
 
     pub async fn get_token_history(&self, days: u32) -> Result<Vec<TokenTransaction>> {
         let credentials = self.check_auth().await?;
-        
+
         let response = self
             .client
             .get(&format!("{}/tokens/history", self.config.api.endpoint))
@@ -225,7 +228,10 @@ impl AuthClient {
             .context("Failed to get token history")?;
 
         if response.status().is_success() {
-            let history = response.json::<Vec<TokenTransaction>>().await.context("Failed to parse token history response")?;
+            let history = response
+                .json::<Vec<TokenTransaction>>()
+                .await
+                .context("Failed to parse token history response")?;
             Ok(history)
         } else {
             error!("Failed to get token history: {}", response.status());

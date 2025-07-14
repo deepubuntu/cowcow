@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -191,9 +191,29 @@ async fn main() -> Result<()> {
         Commands::Doctor => {
             check_health(&config).await?;
         }
-        Commands::Export { format, dest, lang, status, min_snr, max_clipping, min_vad, days } => {
+        Commands::Export {
+            format,
+            dest,
+            lang,
+            status,
+            min_snr,
+            max_clipping,
+            min_vad,
+            days,
+        } => {
             let db = init_db(&config).await?;
-            export_recordings(format, dest, lang, status, min_snr, max_clipping, min_vad, days, &db).await?;
+            export_recordings(
+                format,
+                dest,
+                lang,
+                status,
+                min_snr,
+                max_clipping,
+                min_vad,
+                days,
+                &db,
+            )
+            .await?;
         }
         Commands::Auth { command } => {
             handle_auth_command(command, &config).await?;
@@ -616,31 +636,31 @@ async fn check_health(config: &Config) -> Result<()> {
 }
 
 async fn export_recordings(
-    format: String, 
-    dest: PathBuf, 
+    format: String,
+    dest: PathBuf,
     lang: Option<String>,
     status: Option<String>,
     min_snr: Option<f32>,
     max_clipping: Option<f32>,
     min_vad: Option<f32>,
     days: u32,
-    db: &SqlitePool
+    db: &SqlitePool,
 ) -> Result<()> {
     use std::fs;
-    
+
     // Create destination directory if it doesn't exist
     fs::create_dir_all(&dest).context("Failed to create destination directory")?;
-    
+
     // Build query with filters
     let mut query = String::from("SELECT * FROM recordings WHERE 1=1");
     let mut params: Vec<String> = Vec::new();
-    
+
     // Language filter
     if let Some(lang_filter) = &lang {
         query.push_str(" AND lang = ?");
         params.push(lang_filter.clone());
     }
-    
+
     // Status filter
     match status.as_deref() {
         Some("uploaded") => {
@@ -654,62 +674,88 @@ async fn export_recordings(
         }
         _ => {}
     }
-    
+
     // Date filter
     let start_timestamp = chrono::Utc::now().timestamp() - (days as i64 * 24 * 60 * 60);
     query.push_str(" AND created_at >= ?");
     params.push(start_timestamp.to_string());
-    
+
     query.push_str(" ORDER BY created_at DESC");
-    
+
     // Execute query
-    let mut query_builder = sqlx::query_as::<_, (String, String, Option<String>, String, i64, Option<i64>, String)>(&query);
-    
+    let mut query_builder = sqlx::query_as::<
+        _,
+        (
+            String,
+            String,
+            Option<String>,
+            String,
+            i64,
+            Option<i64>,
+            String,
+        ),
+    >(&query);
+
     for param in &params {
         query_builder = query_builder.bind(param);
     }
-    
-    let recordings = query_builder.fetch_all(db).await.context("Failed to fetch recordings")?;
-    
+
+    let recordings = query_builder
+        .fetch_all(db)
+        .await
+        .context("Failed to fetch recordings")?;
+
     // Filter by QC metrics
     let mut filtered_recordings = Vec::new();
     for recording in recordings {
-        let qc_metrics: serde_json::Value = serde_json::from_str(&recording.3)
-            .context("Failed to parse QC metrics")?;
-        
-        let snr = qc_metrics.get("snr_db").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-        let clipping = qc_metrics.get("clipping_pct").and_then(|v| v.as_f64()).unwrap_or(100.0) as f32;
-        let vad = qc_metrics.get("vad_ratio").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-        
+        let qc_metrics: serde_json::Value =
+            serde_json::from_str(&recording.3).context("Failed to parse QC metrics")?;
+
+        let snr = qc_metrics
+            .get("snr_db")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+        let clipping = qc_metrics
+            .get("clipping_pct")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(100.0) as f32;
+        let vad = qc_metrics
+            .get("vad_ratio")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+
         // Apply QC filters
         if let Some(min_snr_val) = min_snr {
             if snr < min_snr_val {
                 continue;
             }
         }
-        
+
         if let Some(max_clipping_val) = max_clipping {
             if clipping > max_clipping_val {
                 continue;
             }
         }
-        
+
         if let Some(min_vad_val) = min_vad {
             if vad < min_vad_val {
                 continue;
             }
         }
-        
+
         filtered_recordings.push(recording);
     }
-    
+
     if filtered_recordings.is_empty() {
         println!("No recordings found matching the specified criteria.");
         return Ok(());
     }
-    
-    println!("Found {} recordings matching criteria", filtered_recordings.len());
-    
+
+    println!(
+        "Found {} recordings matching criteria",
+        filtered_recordings.len()
+    );
+
     // Export based on format
     match format.as_str() {
         "json" => {
@@ -723,26 +769,39 @@ async fn export_recordings(
             export_wav(&filtered_recordings, &dest).await?;
         }
         _ => {
-            return Err(anyhow::anyhow!("Invalid format. Use 'json', 'wav', or 'both'"));
+            return Err(anyhow::anyhow!(
+                "Invalid format. Use 'json', 'wav', or 'both'"
+            ));
         }
     }
-    
+
     println!("✅ Export completed to: {}", dest.display());
     Ok(())
 }
 
-async fn export_json(recordings: &[(String, String, Option<String>, String, i64, Option<i64>, String)], dest: &Path) -> Result<()> {
+async fn export_json(
+    recordings: &[(
+        String,
+        String,
+        Option<String>,
+        String,
+        i64,
+        Option<i64>,
+        String,
+    )],
+    dest: &Path,
+) -> Result<()> {
     use std::fs::File;
     use std::io::Write;
-    
+
     let json_path = dest.join("recordings.json");
     let mut file = File::create(&json_path).context("Failed to create JSON file")?;
-    
+
     writeln!(file, "[")?;
-    
+
     for (i, recording) in recordings.iter().enumerate() {
         let qc_metrics: serde_json::Value = serde_json::from_str(&recording.3)?;
-        
+
         let record = serde_json::json!({
             "id": recording.0,
             "lang": recording.1,
@@ -752,39 +811,54 @@ async fn export_json(recordings: &[(String, String, Option<String>, String, i64,
             "uploaded_at": recording.5,
             "wav_path": recording.6
         });
-        
+
         if i == recordings.len() - 1 {
             writeln!(file, "  {}", serde_json::to_string_pretty(&record)?)?;
         } else {
             writeln!(file, "  {},", serde_json::to_string_pretty(&record)?)?;
         }
     }
-    
+
     writeln!(file, "]")?;
     println!("📄 JSON export: {}", json_path.display());
     Ok(())
 }
 
-async fn export_wav(recordings: &[(String, String, Option<String>, String, i64, Option<i64>, String)], dest: &Path) -> Result<()> {
+async fn export_wav(
+    recordings: &[(
+        String,
+        String,
+        Option<String>,
+        String,
+        i64,
+        Option<i64>,
+        String,
+    )],
+    dest: &Path,
+) -> Result<()> {
     use std::fs;
-    
+
     let wav_dir = dest.join("recordings");
     fs::create_dir_all(&wav_dir).context("Failed to create WAV directory")?;
-    
+
     let mut copied_files = 0;
-    
+
     for recording in recordings {
         let source_path = Path::new(&recording.6);
         if source_path.exists() {
             let filename = format!("{}_{}.wav", recording.1, recording.0);
             let dest_path = wav_dir.join(&filename);
-            
+
             fs::copy(source_path, &dest_path).context("Failed to copy WAV file")?;
             copied_files += 1;
         }
     }
-    
-    println!("🎵 WAV export: {} files copied to {}", copied_files, wav_dir.display());
+
+    println!(
+        "🎵 WAV export: {} files copied to {}",
+        copied_files,
+        wav_dir.display()
+    );
     Ok(())
 }
 
@@ -876,16 +950,17 @@ async fn handle_tokens_command(command: TokensCommands, config: &Config) -> Resu
         TokensCommands::History { days } => {
             let history = auth_client.get_token_history(days).await?;
             println!("📜 Token Transaction History (last {} days):", days);
-            
+
             if history.is_empty() {
                 println!("  No transactions found.");
             } else {
                 for tx in history {
-                    println!("  {} | {} | {:+} tokens | Balance: {} | {}", 
-                        tx.date.format("%Y-%m-%d %H:%M:%S"), 
-                        tx.transaction_type, 
-                        tx.amount, 
-                        tx.balance, 
+                    println!(
+                        "  {} | {} | {:+} tokens | Balance: {} | {}",
+                        tx.date.format("%Y-%m-%d %H:%M:%S"),
+                        tx.transaction_type,
+                        tx.amount,
+                        tx.balance,
                         tx.notes
                     );
                 }
