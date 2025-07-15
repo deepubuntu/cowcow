@@ -2,7 +2,7 @@
 
 **CowCow is an offline-first, intelligent speech data collection toolkit for low-resource languages**
 
-I call it **Cowcow** because I think its just a cool name. But if youtake life seriously, you can consider it to mean "Capture Our Words/Capture Our World". CowCow is a command-line toolkit built with Rust for collecting high-quality speech data with intelligent recording features, real-time quality control, and seamless cloud synchronization even in low-connectivity situations.
+I call it **Cowcow** because I think its just a cool name. But if you take life seriously, you can consider it to mean "Capture Our Words/Capture Our World". CowCow is a command-line toolkit built with Rust for collecting high-quality speech data with intelligent recording features, real-time quality control, and seamless cloud synchronization even in low-connectivity situations.
 
 ## Key Features
 
