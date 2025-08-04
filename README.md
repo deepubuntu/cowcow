@@ -15,11 +15,32 @@ I call it **Cowcow** because I think its just a cool name. But if youtake life s
 
 ## Quick Start
 
+### 🐳 Docker Deployment (Recommended)
+
+**One-click setup for development:**
+```bash
+git clone https://github.com/thabhelo/cowcow.git
+cd cowcow
+./scripts/docker-setup.sh dev
+```
+
+This starts everything you need: API server, database, storage, and admin tools.
+
+**Services available at:**
+- API: http://localhost:8000
+- Docs: http://localhost:8000/docs  
+- Admin: http://localhost:5050
+
+**📖 [Complete Docker Guide](docs/DOCKER.md)**
+
+### 🔧 Manual Installation
+
 ### Prerequisites
 
 - **Rust** (1.70+): [Install Rust](https://rustup.rs/)
 - **Python** (3.8+): [Install Python](https://python.org)
 - **Audio Input**: Working microphone
+- **Docker** (optional): [Install Docker](https://docs.docker.com/engine/install/)
 
 ## 📚 Documentation
 
@@ -30,9 +51,18 @@ For detailed guides and comprehensive information:
 - **[Configuration Guide](docs/configuration.md)**: Detailed configuration reference
 - **[Architecture Guide](docs/architecture.md)**: System design and components
 
-### 1. Installation
+### 1. Manual Installation
 
-**Option A: Automated Build (Recommended)**
+**Option A: Docker (Recommended for Development)**
+```bash
+# One-command development setup
+./scripts/docker-setup.sh dev
+
+# Or start services manually
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+**Option B: Automated Build (Local Development)**
 ```bash
 # Clone the repository
 git clone https://github.com/thabhelo/cowcow.git
@@ -45,7 +75,7 @@ cd cowcow
 ./scripts/test.sh
 ```
 
-**Option B: Manual Build**
+**Option C: Manual Build**
 ```bash
 # Build the CLI tool
 cargo build --release
@@ -55,6 +85,16 @@ cargo build --release
 
 ### 2. Start the Server
 
+**With Docker:**
+```bash
+# Development mode (includes database, Redis, MinIO)
+./scripts/docker-setup.sh dev
+
+# Production mode (includes NGINX, monitoring)
+./scripts/docker-setup.sh prod
+```
+
+**Manual setup:**
 ```bash
 # Navigate to server directory
 cd server
@@ -310,14 +350,39 @@ When server is running, visit:
 
 ## Production Deployment
 
-### Server Environment Variables
+### 🚀 Docker Production Deployment (Recommended)
+
+```bash
+# Copy environment template
+cp env.example .env
+
+# Edit .env with your production values
+# - Generate JWT_SECRET: openssl rand -hex 32  
+# - Configure R2 storage credentials
+# - Set DEBUG=false
+
+# Start production environment with monitoring
+./scripts/docker-setup.sh prod
+```
+
+**Production includes:**
+- NGINX reverse proxy with SSL
+- PostgreSQL with automated backups
+- Redis caching layer
+- Prometheus metrics + Grafana dashboards
+- Horizontal API scaling
+- Security headers and rate limiting
+
+**📖 [Complete Docker Deployment Guide](docs/DOCKER.md)**
+
+### Manual Server Environment Variables
 
 Create `server/.env`:
 
 ```bash
 # Required
 JWT_SECRET=your-secure-jwt-secret-key
-DATABASE_URL=sqlite:///./cowcow_server.db
+DATABASE_URL=postgresql://user:pass@localhost:5432/cowcow
 
 # Optional - Cloudfare R2 Storage  
 R2_ACCESS_KEY=your-r2-access-key
@@ -332,6 +397,8 @@ R2_BUCKET=cowcow-recordings
 - **Storage Efficiency**: < 160kB per 10s recording (16kHz mono)
 - **Network**: Resumable chunked uploads
 - **Offline-first**: Works without internet
+- **Deployment**: One-click Docker setup
+- **Scalability**: Horizontal scaling with load balancing
 
 ## 🤝 Contributing
 

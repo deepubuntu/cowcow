@@ -1,0 +1,159 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: cowcow-postgres
+    environment:
+      POSTGRES_DB: cowcow
+      POSTGRES_USER: cowcow_user
+      POSTGRES_PASSWORD: cowcow_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cowcow_user -d cowcow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - cowcow-network
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: cowcow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - cowcow-network
+
+  # CowCow API Server
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: cowcow-api
+    environment:
+      # Database Configuration
+      DATABASE_URL: postgresql://cowcow_user:cowcow_password@postgres:5432/cowcow
+      
+      # JWT Configuration
+      JWT_SECRET: ${JWT_SECRET:-development-secret-key-change-in-production}
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 1440
+      
+      # R2/S3 Storage Configuration
+      R2_ACCESS_KEY: ${R2_ACCESS_KEY}
+      R2_SECRET_KEY: ${R2_SECRET_KEY}
+      R2_ENDPOINT: ${R2_ENDPOINT}
+      R2_BUCKET: ${R2_BUCKET:-cowcow-recordings}
+      
+      # Redis Configuration
+      REDIS_URL: redis://redis:6379/0
+      
+      # Server Configuration
+      HOST: 0.0.0.0
+      PORT: 8000
+      DEBUG: ${DEBUG:-false}
+      
+      # Upload Configuration
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_SIZE: 100000000  # 100MB
+      
+      # Token Rewards Configuration
+      TOKENS_PER_MINUTE: 10
+      MIN_RECORDING_LENGTH: 1
+    ports:
+      - "8000:8000"
+      - "50051:50051"  # gRPC port
+    volumes:
+      - uploads_data:/app/uploads
+      - ./server:/app:ro  # Mount source code for development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - cowcow-network
+
+  # MinIO for local S3-compatible storage (development only)
+  minio:
+    image: minio/minio:latest
+    container_name: cowcow-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - cowcow-network
+    profiles:
+      - development
+
+  # NGINX Reverse Proxy (production mode)
+  nginx:
+    image: nginx:alpine
+    container_name: cowcow-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - cowcow-network
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  uploads_data:
+    driver: local
+  minio_data:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  cowcow-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

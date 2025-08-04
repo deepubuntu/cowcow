@@ -1,0 +1,158 @@
+# Production-specific Docker Compose configuration
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+services:
+  # Production API service configuration
+  api:
+    build:
+      target: production  # Use production stage of Dockerfile
+    environment:
+      DEBUG: "false"
+      AUTO_RELOAD: "false"
+      LOG_SQL_QUERIES: "false"
+      DEV_MODE: "false"
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    profiles:
+      - production
+
+  # Production PostgreSQL with backup
+  postgres:
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    profiles:
+      - production
+    secrets:
+      - postgres_password
+
+  # Production Redis with persistence
+  redis:
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    profiles:
+      - production
+
+  # NGINX reverse proxy
+  nginx:
+    profiles:
+      - production
+
+  # Log aggregation
+  loki:
+    image: grafana/loki:latest
+    container_name: cowcow-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - cowcow-network
+    profiles:
+      - production
+      - monitoring
+
+  # Metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cowcow-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - cowcow-network
+    profiles:
+      - production
+      - monitoring
+
+  # Database backup service
+  postgres-backup:
+    image: prodrigestivill/postgres-backup-local:latest
+    container_name: cowcow-postgres-backup
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: cowcow
+      POSTGRES_USER: cowcow_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 6
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - cowcow-network
+    profiles:
+      - production
+    secrets:
+      - postgres_password
+
+volumes:
+  loki_data:
+    driver: local
+  prometheus_data:
+    driver: local
+
+secrets:
+  postgres_password:
+    external: true
