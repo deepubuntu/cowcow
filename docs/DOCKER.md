@@ -13,7 +13,7 @@ This guide covers how to deploy CowCow using Docker for both development and pro
 
 ```bash
 # Clone and navigate to the repository
-git clone https://github.com/thabhelo/cowcow.git
+git clone https://github.com/deepubuntu/cowcow.git
 cd cowcow
 
 # Run the interactive setup script

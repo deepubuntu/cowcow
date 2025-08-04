@@ -10,7 +10,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Thabhelo Duve"]
 license = "Apache-2.0"
-repository = "https://github.com/thabhelo/cowcow"
+repository = "https://github.com/deepubuntu/cowcow"
 description = "Offline-first speech data collection toolkit for low-resource languages"
 
 [workspace.dependencies]

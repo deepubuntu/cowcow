@@ -51,7 +51,7 @@ Complete step-by-step guide to get Cowcow running on your system.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/thabhelo/cowcow.git
+git clone https://github.com/deepubuntu/cowcow.git
 cd cowcow
 ```
 

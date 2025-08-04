@@ -87,13 +87,13 @@ cargo build --release
 
 ## 📚 Resources
 
-**Repo**: https://github.com/thabhelo/cowcow
+**Repo**: https://github.com/deepubuntu/cowcow
 
 **Docs preview**: `/docs/index.md` (will move to Docusaurus site soon)
 
 **Architecture diagram**: `/docs/architecture.md`
 
-**Issue board**: https://github.com/thabhelo/cowcow/issues
+**Issue board**: https://github.com/deepubuntu/cowcow/issues
 
 ## 🤝 Join the conversation
 

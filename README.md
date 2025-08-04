@@ -19,7 +19,7 @@ I call it **Cowcow** because I think its just a cool name. But if youtake life s
 
 **One-click setup for development:**
 ```bash
-git clone https://github.com/thabhelo/cowcow.git
+git clone https://github.com/deepubuntu/cowcow.git
 cd cowcow
 ./scripts/docker-setup.sh dev
 ```
@@ -65,7 +65,7 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 **Option B: Automated Build (Local Development)**
 ```bash
 # Clone the repository
-git clone https://github.com/thabhelo/cowcow.git
+git clone https://github.com/deepubuntu/cowcow.git
 cd cowcow
 
 # Run the automated build script (handles everything!)
